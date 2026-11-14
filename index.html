@@ -1,0 +1,206 @@
+```html
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#2f6f5e" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<title>薄肌打卡</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0; background: #f5f7f6; color: #1f3d34;
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  .page { max-width: 520px; margin: 0 auto; padding: 18px 16px 48px; }
+  .hero {
+    background: linear-gradient(135deg, #2f6f5e, #4f9b84);
+    color: #fff; border-radius: 20px; padding: 20px; margin-bottom: 16px;
+  }
+  .title { font-size: 24px; font-weight: 700; }
+  .sub { font-size: 13px; opacity: .92; margin-top: 6px; }
+  .bar { height: 9px; background: rgba(255,255,255,.25); border-radius: 99px; margin-top: 16px; overflow: hidden; }
+  .bar-fill { height: 100%; width: 0; background: #fff; border-radius: 99px; transition: width .3s; }
+  .rate { font-size: 12px; margin-top: 8px; opacity: .95; }
+  .card {
+    background: #fff; border-radius: 18px; padding: 16px;
+    margin-bottom: 16px; box-shadow: 0 4px 16px rgba(47,111,94,.06);
+  }
+  .card-title { font-size: 15px; font-weight: 600; margin-bottom: 12px; }
+  .week { display: flex; justify-content: space-between; gap: 4px; }
+  .day { flex: 1; text-align: center; padding: 4px 0; border-radius: 12px; }
+  .day.today { background: #eef7f3; }
+  .day.future { opacity: .35; }
+  .dot {
+    width: 38px; height: 38px; line-height: 38px; border-radius: 50%;
+    margin: 0 auto 5px; font-size: 11px; color: #666; background: #e8ecea;
+  }
+  .dot.low { background: #f7e7b0; color: #7a5b00; }
+  .dot.mid { background: #b9e3cf; color: #1d5d45; }
+  .dot.full { background: #2f6f5e; color: #fff; }
+  .label { font-size: 12px; }
+  .date { font-size: 10px; color: #999; margin-top: 1px; }
+  .week-rate { margin-top: 12px; font-size: 12px; color: #4f7d6e; text-align: right; }
+  .task { display: flex; align-items: flex-start; padding: 14px 0; border-bottom: 1px solid #eef1ef; cursor: pointer; }
+  .task:last-child { border-bottom: none; }
+  .check {
+    width: 24px; height: 24px; line-height: 22px; border-radius: 50%;
+    border: 2px solid #b8c9c2; color: #fff; text-align: center;
+    font-size: 15px; margin-right: 12px; flex-shrink: 0; margin-top: 2px;
+  }
+  .task.done .check { background: #2f6f5e; border-color: #2f6f5e; }
+  .task.done .task-name { color: #8aa89d; text-decoration: line-through; }
+  .task-name { font-size: 14px; font-weight: 600; }
+  .task-desc { font-size: 12px; color: #7a8b84; margin-top: 4px; line-height: 1.5; }
+  .reset {
+    width: 100%; margin-top: 4px; padding: 13px; background: #fff;
+    color: #b35b5b; border: 1px solid #ead3d3; border-radius: 14px;
+    font-size: 14px; cursor: pointer;
+  }
+  .tip { margin-top: 18px; font-size: 11px; color: #8a9a93; line-height: 1.6; text-align: center; }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="hero">
+    <div class="title">薄肌打卡</div>
+    <div class="sub" id="sub"></div>
+    <div class="bar"><div class="bar-fill" id="barFill"></div></div>
+    <div class="rate" id="todayRate"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">本周可视化</div>
+    <div class="week" id="week"></div>
+    <div class="week-rate" id="weekRate"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">今日任务</div>
+    <div id="tasks"></div>
+  </div>
+
+  <button class="reset" id="resetBtn">清除全部记录</button>
+  <div class="tip">出现刺痛、头晕、眼前闪光或飞蚊骤增，立即停止。高度近视不憋气、不晃头。</div>
+</div>
+
+<script>
+const STORAGE_KEY = 'thinMuscleCheckin';
+const pad = n => n < 10 ? '0' + n : '' + n;
+const fmt = d => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+const parse = s => { const p = s.split('-').map(Number); return new Date(p[0], p[1] - 1, p[2]); };
+
+function getTasks(dateStr) {
+  const day = parse(dateStr).getDay();
+  const training = day === 1 || day === 3 || day === 5;
+  if (training) {
+    return [
+      { id: 'premeal', name: '练前加餐', desc: '无糖酸奶150g+半根香蕉，或1个鸡蛋+半根香蕉' },
+      { id: 'workout', name: '力量训练', desc: '按Day1/2/3计划，30–35分钟，不憋气' },
+      { id: 'stretch', name: '训练后拉伸', desc: '大腿前侧、臀部、小腿各20–30秒，不弹震' },
+      { id: 'dinner', name: '晚餐按菜谱', desc: '高蛋白+蔬菜；训练日主食减半或不吃' }
+    ];
+  }
+  return [
+    { id: 'workout', name: '休息/散步', desc: '散步10–15分钟，不跑跳；不想动就只拉伸' },
+    { id: 'stretch', name: '拉伸', desc: '5分钟，不弹震，腰膝踝无痛' },
+    { id: 'dinner', name: '晚餐按菜谱', desc: '可加一拳头主食；不喝汤底' }
+  ];
+}
+
+function loadData() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; } catch(e) { return {}; } }
+function saveData(d) { localStorage.setItem(STORAGE_KEY, JSON.stringify(d)); }
+
+function qualified(dateStr, data) {
+  const tasks = getTasks(dateStr);
+  const rec = data[dateStr] || {};
+  return tasks.filter(t => rec[t.id]).length / tasks.length >= 0.75;
+}
+
+function calcStreak(todayStr, data) {
+  let streak = 0;
+  let cursor = parse(todayStr);
+  if (!qualified(todayStr, data)) cursor.setDate(cursor.getDate() - 1);
+  while (true) {
+    const s = fmt(cursor);
+    if (!qualified(s, data)) break;
+    streak++;
+    cursor.setDate(cursor.getDate() - 1);
+  }
+  return streak;
+}
+
+function refresh() {
+  const data = loadData();
+  const today = new Date();
+  const todayStr = fmt(today);
+  const rec = data[todayStr] || {};
+  const tasks = getTasks(todayStr).map(t => ({ ...t, checked: !!rec[t.id] }));
+  const checkedCount = tasks.filter(t => t.checked).length;
+  const todayRate = Math.round(checkedCount / tasks.length * 100);
+
+  document.getElementById('sub').textContent = todayStr + ' · 连续达标 ' + calcStreak(todayStr, data) + ' 天';
+  document.getElementById('barFill').style.width = todayRate + '%';
+  document.getElementById('todayRate').textContent = '今日完成 ' + todayRate + '%';
+
+  document.getElementById('tasks').innerHTML = tasks.map(t => `
+    <div class="task ${t.checked ? 'done' : ''}" data-id="${t.id}">
+      <div class="check">${t.checked ? '✓' : ''}</div>
+      <div><div class="task-name">${t.name}</div><div class="task-desc">${t.desc}</div></div>
+    </div>
+  `).join('');
+  document.querySelectorAll('.task').forEach(el => {
+    el.onclick = () => toggleTask(el.dataset.id);
+  });
+
+  const day = today.getDay();
+  const monday = new Date(today);
+  monday.setDate(today.getDate() + (day === 0 ? -6 : 1 - day));
+  const labels = ['一','二','三','四','五','六','日'];
+  let sumC = 0, sumT = 0;
+  const week = labels.map((label, i) => {
+    const d = new Date(monday); d.setDate(monday.getDate() + i);
+    const ds = fmt(d);
+    const ts = getTasks(ds);
+    const r = data[ds] || {};
+    const c = ts.filter(t => r[t.id]).length;
+    const rate = Math.round(c / ts.length * 100);
+    const future = ds > todayStr;
+    if (!future) { sumC += c; sumT += ts.length; }
+    let level = 'none';
+    if (rate >= 100) level = 'full';
+    else if (rate >= 50) level = 'mid';
+    else if (rate > 0) level = 'low';
+    return `<div class="day ${ds === todayStr ? 'today' : ''} ${future ? 'future' : ''}">
+      <div class="dot ${level}">${c}/${ts.length}</div>
+      <div class="label">周${label}</div><div class="date">${ds.slice(5)}</div>
+    </div>`;
+  }).join('');
+  document.getElementById('week').innerHTML = week;
+  document.getElementById('weekRate').textContent = '本周已过天数完成率 ' + (sumT ? Math.round(sumC / sumT * 100) : 0) + '%';
+}
+
+function toggleTask(id) {
+  const todayStr = fmt(new Date());
+  const data = loadData();
+  const rec = data[todayStr] || {};
+  rec[id] = !rec[id];
+  data[todayStr] = rec;
+  saveData(data);
+  refresh();
+}
+
+document.getElementById('resetBtn').onclick = () => {
+  if (confirm('清除全部打卡记录？此操作不可恢复。')) {
+    localStorage.removeItem(STORAGE_KEY);
+    refresh();
+  }
+};
+
+refresh();
+</script>
+</body>
+</html>
+```
